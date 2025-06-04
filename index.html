@@ -1,269 +1,75 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Simulación gravitacional con fusión</title>
-<style>
-  body {
-    margin: 0; background: #000;
-    color: white;
-    font-family: monospace;
-    user-select: none;
-  }
-  #info {
-    position: fixed;
-    top: 10px; left: 10px;
-    background: rgba(0,0,0,0.6);
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 14px;
-    line-height: 1.4;
-  }
-  canvas {
-    display: block;
-    background: #111;
-  }
-</style>
-</head>
-<body>
-<div id="info">
-  <div>Masa (1/15): <span id="masaDisplay">1</span></div>
-  <div>Radio (1/10): <span id="radioDisplay">1</span></div>
-  <div>Velocidad inicial (5/20): <span id="velDisplay">5</span></div>
-  <div>Presiona 1/2/3 para cambiar propiedades, clic para crear planeta</div>
-  <div>R para reiniciar, Espacio para pausar</div>
-</div>
-<canvas id="canvas"></canvas>
+const canvas = document.getElementById("simulacion");
+const ctx = canvas.getContext("2d");
 
-<script>
-(() => {
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  let W, H;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-  const G = 0.05; // constante gravitacional (ajustada para estabilidad)
-  let planets = [];
+const planetas = [];
+const G = 0.05; // Constante gravitacional más baja para que no se aceleren tanto
 
-  // Propiedades iniciales
-  let masaActual = 1;
-  let radioActual = 1;
-  let velActual = 5;
+function crearPlaneta(x, y) {
+    const masa = Math.random() * 5 + 1; // Masa aleatoria entre 1 y 6
+    const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+    const planeta = {
+        x,
+        y,
+        vx: 0, // Velocidad inicial en X = 0
+        vy: 0, // Velocidad inicial en Y = 0
+        masa,
+        radio: masa * 2,
+        color
+    };
+    planetas.push(planeta);
+}
 
-  const masaDisplay = document.getElementById('masaDisplay');
-  const radioDisplay = document.getElementById('radioDisplay');
-  const velDisplay = document.getElementById('velDisplay');
+function actualizar() {
+    for (let i = 0; i < planetas.length; i++) {
+        let pi = planetas[i];
+        for (let j = 0; j < planetas.length; j++) {
+            if (i !== j) {
+                let pj = planetas[j];
+                let dx = pj.x - pi.x;
+                let dy = pj.y - pi.y;
+                let distSq = dx * dx + dy * dy;
+                let dist = Math.sqrt(distSq);
 
-  let paused = false;
+                if (dist > 1) {
+                    let fuerza = (G * pj.masa) / distSq;
+                    let ax = fuerza * dx / dist;
+                    let ay = fuerza * dy / dist;
 
-  function resize() {
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = W;
-    canvas.height = H;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // Función para mezclar colores (simple promedio RGB)
-  function mezclarColores(c1, c2) {
-    const rgb1 = c1.match(/\d+/g).map(Number);
-    const rgb2 = c2.match(/\d+/g).map(Number);
-    const r = Math.floor((rgb1[0] + rgb2[0]) / 2);
-    const g = Math.floor((rgb1[1] + rgb2[1]) / 2);
-    const b = Math.floor((rgb1[2] + rgb2[2]) / 2);
-    return `rgb(${r},${g},${b})`;
-  }
-
-  // Crear color aleatorio en rgb
-  function colorAleatorio() {
-    const r = Math.floor(100 + Math.random() * 155);
-    const g = Math.floor(100 + Math.random() * 155);
-    const b = Math.floor(100 + Math.random() * 155);
-    return `rgb(${r},${g},${b})`;
-  }
-
-  // Planeta con posición, masa, radio, velocidad, color
-  class Planet {
-    constructor(x, y, masa, radio, vx, vy, color) {
-      this.x = x;
-      this.y = y;
-      this.masa = masa;
-      this.radio = radio;
-      this.vx = vx;
-      this.vy = vy;
-      this.color = color;
-    }
-
-    dibujar(ctx) {
-      ctx.beginPath();
-      ctx.fillStyle = this.color;
-      ctx.shadowColor = this.color;
-      ctx.shadowBlur = 10;
-      ctx.arc(this.x, this.y, this.radio, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    actualizar() {
-      this.x += this.vx;
-      this.y += this.vy;
-    }
-  }
-
-  function actualizarInfo() {
-    masaDisplay.textContent = masaActual;
-    radioDisplay.textContent = radioActual;
-    velDisplay.textContent = velActual;
-  }
-
-  // Fusión de dos planetas
-  function fusionar(planetaA, planetaB) {
-    // Masa total
-    const masaTotal = planetaA.masa + planetaB.masa;
-
-    // Conservación del momento lineal para velocidad
-    const vxNuevo = (planetaA.vx * planetaA.masa + planetaB.vx * planetaB.masa) / masaTotal;
-    const vyNuevo = (planetaA.vy * planetaA.masa + planetaB.vy * planetaB.masa) / masaTotal;
-
-    // Radio proporcional al área (πr^2 ~ masa)
-    // r = sqrt(masa / π) para mantener área proporcional
-    const radioNuevo = Math.sqrt(masaTotal / Math.PI);
-
-    // Posición promedio para evitar saltos bruscos
-    const xNuevo = (planetaA.x * planetaA.masa + planetaB.x * planetaB.masa) / masaTotal;
-    const yNuevo = (planetaA.y * planetaA.masa + planetaB.y * planetaB.masa) / masaTotal;
-
-    // Color promedio
-    const colorNuevo = mezclarColores(planetaA.color, planetaB.color);
-
-    return new Planet(xNuevo, yNuevo, masaTotal, radioNuevo, vxNuevo, vyNuevo, colorNuevo);
-  }
-
-  // Calcular fuerzas y actualizar velocidad
-  function aplicarGravedad() {
-    for(let i = 0; i < planets.length; i++) {
-      let pi = planets[i];
-      let ax = 0, ay = 0;
-      for(let j = 0; j < planets.length; j++) {
-        if(i === j) continue;
-        let pj = planets[j];
-        const dx = pj.x - pi.x;
-        const dy = pj.y - pi.y;
-        const distSq = dx*dx + dy*dy;
-        const dist = Math.sqrt(distSq);
-
-        if(dist > 0.1) { // evitar división por cero
-          const fuerza = (G * pj.masa) / distSq;
-          ax += fuerza * dx / dist;
-          ay += fuerza * dy / dist;
+                    pi.vx += ax;
+                    pi.vy += ay;
+                }
+            }
         }
-      }
-      // Actualizar velocidades con aceleración
-      pi.vx += ax;
-      pi.vy += ay;
-    }
-  }
-
-  // Detectar colisiones y fusionar planetas
-  function detectarColisiones() {
-    for(let i = 0; i < planets.length; i++) {
-      for(let j = i + 1; j < planets.length; j++) {
-        const p1 = planets[i];
-        const p2 = planets[j];
-        const dx = p1.x - p2.x;
-        const dy = p1.y - p2.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if(dist < p1.radio + p2.radio) {
-          // Fusionar
-          const nuevoPlaneta = fusionar(p1, p2);
-          // Remover los dos planetas originales y añadir el nuevo
-          planets.splice(j, 1);
-          planets.splice(i, 1);
-          planets.push(nuevoPlaneta);
-          // Reiniciar el loop para evitar problemas con índices
-          i = -1;
-          break;
-        }
-      }
-    }
-  }
-
-  // Crear planeta en posición con velocidad aleatoria en dirección al click
-  function crearPlaneta(x, y) {
-    // Dirección aleatoria entre 0 y 2π para la velocidad inicial
-    // Pero que tenga un ángulo aleatorio para más variedad:
-    const angle = Math.random() * Math.PI * 2;
-
-    const vx = Math.cos(angle) * velActual;
-    const vy = Math.sin(angle) * velActual;
-
-    // Radio proporcional (para que sea visible) y relacionado con el radio actual
-    // Radio real depende de masa para que visualmente sea coherente
-    // pero permitimos ajustar radio directamente, por simplicidad usamos radioActual
-    const radio = radioActual;
-
-    const color = colorAleatorio();
-    const planet = new Planet(x, y, masaActual, radio, vx, vy, color);
-    planets.push(planet);
-  }
-
-  function limpiar() {
-    planets = [];
-  }
-
-  function loop() {
-    if(!paused) {
-      aplicarGravedad();
-      detectarColisiones();
-      for(const p of planets) p.actualizar();
     }
 
-    ctx.clearRect(0, 0, W, H);
-
-    for(const p of planets) p.dibujar(ctx);
-
-    requestAnimationFrame(loop);
-  }
-
-  window.addEventListener('keydown', e => {
-    if(e.target.tagName === 'INPUT') return;
-
-    switch(e.key.toLowerCase()) {
-      case '1':
-        masaActual++;
-        if(masaActual > 15) masaActual = 1;
-        actualizarInfo();
-        break;
-      case '2':
-        radioActual++;
-        if(radioActual > 10) radioActual = 1;
-        actualizarInfo();
-        break;
-      case '3':
-        velActual++;
-        if(velActual > 20) velActual = 5;
-        actualizarInfo();
-        break;
-      case 'r':
-        limpiar();
-        break;
-      case ' ':
-        paused = !paused;
-        break;
+    for (let planeta of planetas) {
+        planeta.x += planeta.vx;
+        planeta.y += planeta.vy;
     }
-  });
+}
 
-  canvas.addEventListener('click', e => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    crearPlaneta(x, y);
-  });
+function dibujar() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  actualizarInfo();
-  loop();
-})();
-</script>
-</body>
-</html>
+    for (let planeta of planetas) {
+        ctx.beginPath();
+        ctx.arc(planeta.x, planeta.y, planeta.radio, 0, 2 * Math.PI);
+        ctx.fillStyle = planeta.color;
+        ctx.fill();
+    }
+}
+
+function bucle() {
+    actualizar();
+    dibujar();
+    requestAnimationFrame(bucle);
+}
+
+canvas.addEventListener("click", e => {
+    crearPlaneta(e.clientX, e.clientY);
+});
+
+bucle();
