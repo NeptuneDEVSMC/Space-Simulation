@@ -69,7 +69,7 @@
           let distSq = dx * dx + dy * dy;
           let dist = Math.sqrt(distSq);
 
-          if (dist < 1) continue; // evitar división por cero
+         if (dist < this.radius + other.radius) continue; // evitar fuerzas absurdas entre planetas superpuestos
 
           let force = (gravityStrength * this.mass * other.mass) / distSq;
           let ax = (force * dx) / (dist * this.mass);
