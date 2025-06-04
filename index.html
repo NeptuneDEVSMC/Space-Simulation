@@ -1,98 +1,145 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Simulación Gravitacional</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulación Espacial 2D</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      background-color: black;
+      background: #000;
     }
     canvas {
       display: block;
     }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: sans-serif;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <canvas id="simulacion"></canvas>
-
+  <canvas id="canvas"></canvas>
+  <div id="info">
+    <p><strong>Controles:</strong></p>
+    <p>Click: crear planeta</p>
+    <p>1: cambiar fuerza gravitacional (actual: <span id="gravity">5</span>)</p>
+    <p>2: cambiar tamaño del planeta (actual: <span id="radius">5</span>)</p>
+    <p>Espacio: pausa/reanudar</p>
+    <p>R: reiniciar</p>
+  </div>
   <script>
-    const canvas = document.getElementById("simulacion");
+    const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const planetas = [];
-    const G = 0.05; // Constante gravitacional
+    let planets = [];
+    let gravityStrength = 5;
+    let planetRadius = 5;
+    let paused = false;
 
-    function crearPlaneta(x, y) {
-      const masa = Math.random() * 5 + 1; // Entre 1 y 6
-      const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
-      const planeta = {
-        x,
-        y,
-        vx: 0,
-        vy: 0,
-        masa,
-        radio: masa * 2,
-        color
-      };
-      planetas.push(planeta);
-    }
+    document.getElementById("gravity").textContent = gravityStrength;
+    document.getElementById("radius").textContent = planetRadius;
 
-    function actualizar() {
-      for (let i = 0; i < planetas.length; i++) {
-        let pi = planetas[i];
-        for (let j = 0; j < planetas.length; j++) {
-          if (i !== j) {
-            let pj = planetas[j];
-            let dx = pj.x - pi.x;
-            let dy = pj.y - pi.y;
-            let distSq = dx * dx + dy * dy;
-            let dist = Math.sqrt(distSq);
+    class Planet {
+      constructor(x, y, radius, color) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.mass = radius * radius;
+        this.color = color;
+        this.vx = 0;
+        this.vy = 0;
+      }
 
-            if (dist > 1) {
-              let fuerza = (G * pj.masa) / distSq;
-              let ax = fuerza * dx / dist;
-              let ay = fuerza * dy / dist;
+      applyGravity(planets) {
+        for (let other of planets) {
+          if (other === this) continue;
 
-              pi.vx += ax;
-              pi.vy += ay;
-            }
-          }
+          let dx = other.x - this.x;
+          let dy = other.y - this.y;
+          let distSq = dx * dx + dy * dy;
+          let dist = Math.sqrt(distSq);
+
+          if (dist < 1) continue; // evitar división por cero
+
+          let force = (gravityStrength * this.mass * other.mass) / distSq;
+          let ax = (force * dx) / (dist * this.mass);
+          let ay = (force * dy) / (dist * this.mass);
+
+          this.vx += ax;
+          this.vy += ay;
         }
       }
 
-      for (let planeta of planetas) {
-        planeta.x += planeta.vx;
-        planeta.y += planeta.vy;
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
       }
-    }
 
-    function dibujar() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      for (let planeta of planetas) {
+      draw(ctx) {
         ctx.beginPath();
-        ctx.arc(planeta.x, planeta.y, planeta.radio, 0, 2 * Math.PI);
-        ctx.fillStyle = planeta.color;
+        ctx.fillStyle = this.color;
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    function bucle() {
-      actualizar();
-      dibujar();
-      requestAnimationFrame(bucle);
+    function randomColor() {
+      return `hsl(${Math.random() * 360}, 80%, 60%)`;
     }
 
-    canvas.addEventListener("click", e => {
-      crearPlaneta(e.clientX, e.clientY);
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const color = randomColor();
+      const planet = new Planet(x, y, planetRadius, color);
+      planets.push(planet);
     });
 
-    bucle();
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "1") {
+        gravityStrength = gravityStrength % 10 + 1;
+        document.getElementById("gravity").textContent = gravityStrength;
+      } else if (e.key === "2") {
+        planetRadius = planetRadius % 10 + 1;
+        document.getElementById("radius").textContent = planetRadius;
+      } else if (e.key === "r" || e.key === "R") {
+        planets = [];
+      } else if (e.code === "Space") {
+        paused = !paused;
+      }
+    });
+
+    function animate() {
+      if (!paused) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let planet of planets) {
+          planet.applyGravity(planets);
+        }
+        for (let planet of planets) {
+          planet.update();
+          planet.draw(ctx);
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
   </script>
 </body>
 </html>
