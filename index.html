@@ -1,188 +1,228 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Simulación Espacial 2D con Matter.js</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-    }
-    canvas {
-      display: block;
-      background: #000;
-    }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-family: sans-serif;
-      background: rgba(0,0,0,0.4);
-      padding: 8px;
-      border-radius: 4px;
-      z-index: 10;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulación gravitacional con Matter.js</title>
+<style>
+  body, html {
+    margin:0; padding:0; overflow:hidden; background:#111;
+    color: white;
+    font-family: Arial, sans-serif;
+    user-select: none;
+  }
+  #instructions {
+    position: fixed;
+    top: 10px; left: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 10px;
+    border-radius: 6px;
+    max-width: 320px;
+    font-size: 14px;
+    line-height: 1.4;
+    z-index: 100;
+  }
+  canvas {
+    display: block;
+    background: #111;
+  }
+</style>
 </head>
 <body>
+<div id="instructions">
+  <b>Instrucciones:</b><br>
+  • Click: crear planeta<br>
+  • Tecla "1": cambiar tamaño del planeta a crear<br>
+  • Barra espaciadora: pausar/reanudar<br>
+  • Tecla "R": reiniciar (borrar planetas)<br>
+  <br>
+  <span id="sizeInfo">Tamaño actual: 20 px</span>
+</div>
 
-  <div id="info">
-    <p><strong>Controles:</strong></p>
-    <p>Click: crear planeta</p>
-    <p>Espacio: pausa/reanudar</p>
-    <p>R: reiniciar</p>
-  </div>
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+(() => {
+  const {
+    Engine,
+    Render,
+    World,
+    Bodies,
+    Body,
+    Events,
+    Runner,
+    Composite,
+    Vector,
+  } = Matter;
 
-  <canvas id="canvas"></canvas>
+  // Configuración inicial
+  let width = window.innerWidth;
+  let height = window.innerHeight;
 
-  <!-- Matter.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  const engine = Engine.create();
+  const world = engine.world;
 
-  <script>
-    // Alias de Matter.js
-    const { Engine, Render, Runner, World, Bodies, Body, Events, Vector } = Matter;
+  // Amortiguación global para reducir velocidad (fricción del aire)
+  world.gravity.y = 0; // no gravedad del mundo, solo entre planetas
 
-    const canvas = document.getElementById('canvas');
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+  // Crear render
+  const render = Render.create({
+    element: document.body,
+    engine: engine,
+    options: {
+      width,
+      height,
+      wireframes: false,
+      background: '#111',
+      pixelRatio: window.devicePixelRatio,
+    },
+  });
 
-    // Crear motor y mundo
-    const engine = Engine.create();
-    const world = engine.world;
-    world.gravity.scale = 0; // quitamos gravedad vertical porque haremos gravedad manual
+  Render.run(render);
 
-    // Crear render personalizado usando el canvas existente
-    const render = Render.create({
-      canvas: canvas,
-      engine: engine,
-      options: {
-        width: width,
-        height: height,
-        wireframes: false,
-        background: '#000',
+  const runner = Runner.create();
+  Runner.run(runner, engine);
+
+  // Variables
+  let planetRadius = 20; // tamaño inicial al crear
+  const minRadius = 5;
+  const maxRadius = 60;
+
+  const planets = [];
+
+  let paused = false;
+
+  // Bordes invisibles para que planetas no salgan del canvas
+  const wallThickness = 50;
+  let walls = [];
+
+  function createWalls() {
+    // Quitar paredes viejas
+    if(walls.length){
+      for(const wall of walls){
+        World.remove(world, wall);
       }
-    });
-
-    Render.run(render);
-
-    // Runner para controlar simulación
-    const runner = Runner.create();
-    Runner.run(runner, engine);
-
-    // Bordes (paredes) para que los planetas reboten suavemente
-    const thickness = 50;
-    const walls = [
-      Bodies.rectangle(width/2, -thickness/2, width, thickness, { isStatic: true }),           // arriba
-      Bodies.rectangle(width/2, height + thickness/2, width, thickness, { isStatic: true }),   // abajo
-      Bodies.rectangle(-thickness/2, height/2, thickness, height, { isStatic: true }),         // izquierda
-      Bodies.rectangle(width + thickness/2, height/2, thickness, height, { isStatic: true })   // derecha
-    ];
-    World.add(world, walls);
-
-    // Planetas almacenados aquí
-    const planets = [];
-
-    // Constantes
-    const G = 0.0015; // constante gravitacional ajustable para equilibrio visual
-
-    // Crear planeta con masa proporcional al área y color random
-    function createPlanet(x, y, radius) {
-      const mass = radius * radius * 0.001;
-      const color = `hsl(${Math.random()*360}, 80%, 60%)`;
-      const planet = Bodies.circle(x, y, radius, {
-        mass: mass,
-        restitution: 0.8,
-        frictionAir: 0.02,
-        render: { fillStyle: color }
-      });
-      World.add(world, planet);
-      planets.push(planet);
     }
 
-    // Aplicar fuerza gravitacional entre todos los planetas (fuerza de atracción mutua)
-    Events.on(engine, 'beforeUpdate', () => {
-      for (let i = 0; i < planets.length; i++) {
-        for (let j = i + 1; j < planets.length; j++) {
-          const p1 = planets[i];
-          const p2 = planets[j];
+    walls = [
+      Bodies.rectangle(width/2, -wallThickness/2, width, wallThickness, { isStatic: true }),
+      Bodies.rectangle(width/2, height+wallThickness/2, width, wallThickness, { isStatic: true }),
+      Bodies.rectangle(-wallThickness/2, height/2, wallThickness, height, { isStatic: true }),
+      Bodies.rectangle(width+wallThickness/2, height/2, wallThickness, height, { isStatic: true }),
+    ];
+    World.add(world, walls);
+  }
+  createWalls();
 
-          const direction = Vector.sub(p2.position, p1.position);
-          const distanceSq = Vector.magnitudeSquared(direction);
+  // Función para color vibrante aleatorio
+  function randomVibrantColor(){
+    const r = Math.floor(155 + Math.random()*100);
+    const g = Math.floor(155 + Math.random()*100);
+    const b = Math.floor(155 + Math.random()*100);
+    return `rgb(${r},${g},${b})`;
+  }
 
-          if (distanceSq === 0) continue; // evitar división por cero
+  // Crear planeta
+  function createPlanet(x, y, radius) {
+    // Masa proporcional al área (radio²)
+    const mass = radius * radius;
 
-          const forceMagnitude = (G * p1.mass * p2.mass) / distanceSq;
-          const force = Vector.normalise(direction);
-          const forceVec = Vector.mult(force, forceMagnitude);
-
-          // Aplicar fuerzas opuestas
-          Body.applyForce(p1, p1.position, forceVec);
-          Body.applyForce(p2, p2.position, Vector.neg(forceVec));
-        }
-      }
+    // Cuerpo circular con fricción y restitution para rebote suave
+    const planet = Bodies.circle(x, y, radius, {
+      mass,
+      restitution: 0.8,
+      frictionAir: 0.02,
+      render: {
+        fillStyle: randomVibrantColor(),
+      },
     });
+    planets.push(planet);
+    World.add(world, planet);
+  }
 
-    // Click para crear planeta, con velocidad inicial tangencial si hay planeta central
-    canvas.addEventListener('click', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const radius = 15;
+  // Atracción gravitacional inversa al cuadrado entre planetas
+  // G es constante para ajustar fuerza
+  const G = 0.0015;
 
-      createPlanet(x, y, radius);
+  Events.on(engine, "beforeUpdate", () => {
+    if(paused) return;
 
-      if (planets.length > 1) {
-        // Asumimos que el primer planeta es el central
-        const central = planets[0];
-        const newPlanet = planets[planets.length - 1];
+    // Aplicar fuerza gravitacional entre planetas
+    for(let i = 0; i < planets.length; i++){
+      for(let j = i+1; j < planets.length; j++){
+        const bodyA = planets[i];
+        const bodyB = planets[j];
 
-        const dx = newPlanet.position.x - central.position.x;
-        const dy = newPlanet.position.y - central.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const delta = Vector.sub(bodyB.position, bodyA.position);
+        const distSq = Vector.magnitudeSquared(delta);
 
-        if (dist > 0) {
-          // Dirección tangencial para órbita
-          const tangent = Vector.perp(Vector.normalise({ x: dx, y: dy }));
+        if(distSq === 0) continue; // evitar división por 0
 
-          // Velocidad orbital aproximada v = sqrt(G * M / r)
-          const v = Math.sqrt((G * central.mass) / dist);
+        const forceMagnitude = (G * bodyA.mass * bodyB.mass) / distSq;
 
-          // Establecemos velocidad tangencial para nuevo planeta
-          Body.setVelocity(newPlanet, { x: tangent.x * v * 60, y: tangent.y * v * 60 }); 
-          // Multiplico por 60 para que se note en pixeles/frame (ajusta según tu monitor)
-        }
+        // Dirección normalizada
+        const force = Vector.mult(Vector.normalise(delta), forceMagnitude);
+
+        Body.applyForce(bodyA, bodyA.position, force);
+        Body.applyForce(bodyB, bodyB.position, Vector.neg(force));
       }
-    });
+    }
 
-    // Pausar y reiniciar
-    let paused = false;
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') {
-        paused = !paused;
-        runner.enabled = !paused;
-      } else if (e.key.toLowerCase() === 'r') {
-        // Reiniciar
-        for (const p of planets) {
-          World.remove(world, p);
-        }
-        planets.length = 0;
-      }
-    });
-
-    // Ajustar canvas al redimensionar ventana
-    window.addEventListener('resize', () => {
-      render.canvas.width = window.innerWidth;
-      render.canvas.height = window.innerHeight;
-      Render.lookAt(render, {
-        min: { x: 0, y: 0 },
-        max: { x: window.innerWidth, y: window.innerHeight }
+    // Pequeña amortiguación manual para evitar caos total
+    for(const p of planets){
+      Body.setVelocity(p, {
+        x: p.velocity.x * 0.995,
+        y: p.velocity.y * 0.995,
       });
-    });
+    }
+  });
 
-    // Crear planeta central grande al iniciar (el "sol")
-    createPlanet(width/2, height/2, 40);
-  </script>
+  // Crear planeta al hacer click
+  window.addEventListener("mousedown", e => {
+    if(e.button !== 0) return; // solo click izquierdo
+    const rect = render.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    createPlanet(x, y, planetRadius);
+  });
+
+  // Cambiar tamaño planeta con tecla "1"
+  window.addEventListener("keydown", e => {
+    if(e.key === "1"){
+      // Cambiar tamaño cíclicamente
+      planetRadius += 10;
+      if(planetRadius > maxRadius) planetRadius = minRadius;
+      document.getElementById("sizeInfo").textContent = `Tamaño actual: ${planetRadius} px`;
+    }
+    else if(e.key === " "){
+      // Pausar o reanudar
+      paused = !paused;
+      e.preventDefault();
+    }
+    else if(e.key.toLowerCase() === "r"){
+      // Reiniciar todo
+      for(const p of planets){
+        World.remove(world, p);
+      }
+      planets.length = 0;
+    }
+  });
+
+  // Responsivo canvas
+  window.addEventListener("resize", () => {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    render.canvas.width = width;
+    render.canvas.height = height;
+    render.options.width = width;
+    render.options.height = height;
+    Render.lookAt(render, {
+      min: { x: 0, y: 0 },
+      max: { x: width, y: height }
+    });
+    createWalls();
+  });
+
+})();
+</script>
 </body>
 </html>
