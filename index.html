@@ -30,7 +30,7 @@
   <div id="info">
     <p><strong>Controles:</strong></p>
     <p>Click: crear planeta</p>
-    <p>1: cambiar fuerza gravitacional (actual: <span id="gravity">5</span>)</p>
+    <p>1: cambiar fuerza gravitacional (actual: <span id="gravity">0.1</span>)</p>
     <p>2: cambiar tamaño del planeta (actual: <span id="radius">5</span>)</p>
     <p>Espacio: pausa/reanudar</p>
     <p>R: reiniciar</p>
@@ -42,7 +42,7 @@
     canvas.height = window.innerHeight;
 
     let planets = [];
-    let gravityStrength = 5;
+    let gravityStrength = 0.1;
     let planetRadius = 5;
     let paused = false;
 
@@ -60,7 +60,7 @@
         this.vy = 0;
       }
 
-      applyGravity(planets) {
+      applyGravity(planets, deltaTime) {
         for (let other of planets) {
           if (other === this) continue;
 
@@ -69,20 +69,20 @@
           let distSq = dx * dx + dy * dy;
           let dist = Math.sqrt(distSq);
 
-         if (dist < this.radius + other.radius) continue; // evitar fuerzas absurdas entre planetas superpuestos
+          if (dist < this.radius + other.radius) continue; // Evitar explosión por colisión
 
           let force = (gravityStrength * this.mass * other.mass) / distSq;
           let ax = (force * dx) / (dist * this.mass);
           let ay = (force * dy) / (dist * this.mass);
 
-          this.vx += ax;
-          this.vy += ay;
+          this.vx += ax * deltaTime;
+          this.vy += ay * deltaTime;
         }
       }
 
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
+      update(deltaTime) {
+        this.x += this.vx * deltaTime;
+        this.y += this.vy * deltaTime;
       }
 
       draw(ctx) {
@@ -108,33 +108,39 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "1") {
-        gravityStrength = gravityStrength % 10 + 1;
-        document.getElementById("gravity").textContent = gravityStrength;
+        gravityStrength = (gravityStrength + 0.1) % 2;
+        if (gravityStrength < 0.1) gravityStrength = 0.1;
+        document.getElementById("gravity").textContent = gravityStrength.toFixed(1);
       } else if (e.key === "2") {
         planetRadius = planetRadius % 10 + 1;
         document.getElementById("radius").textContent = planetRadius;
-      } else if (e.key === "r" || e.key === "R") {
+      } else if (e.key.toLowerCase() === "r") {
         planets = [];
       } else if (e.code === "Space") {
         paused = !paused;
       }
     });
 
-    function animate() {
+    let lastTime = performance.now();
+
+    function animate(time) {
+      const deltaTime = (time - lastTime) / 1000;
+      lastTime = time;
+
       if (!paused) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (let planet of planets) {
-          planet.applyGravity(planets);
+          planet.applyGravity(planets, deltaTime);
         }
         for (let planet of planets) {
-          planet.update();
+          planet.update(deltaTime);
           planet.draw(ctx);
         }
       }
       requestAnimationFrame(animate);
     }
 
-    animate();
+    animate(lastTime);
 
     window.addEventListener("resize", () => {
       canvas.width = window.innerWidth;
