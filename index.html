@@ -153,9 +153,9 @@
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "1") {
-        gravityStrength = gravityStrength % 10 + 1;
-        document.getElementById("gravity").textContent = gravityStrength;
+   if (e.key === "1") {
+  gravityStrength = gravityStrength % 5 + 1;  // cambia el máximo a 5
+  document.getElementById("gravity").textContent = gravityStrength;
       } else if (e.key === "2") {
         planetRadius = planetRadius % 10 + 1;
         document.getElementById("radius").textContent = planetRadius;
